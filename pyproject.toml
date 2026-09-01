@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synckit"
+version = "0.3.0"
+description = "Zero-dependency building blocks for scheduled API synchronisation jobs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Avery McQueen" }]
+keywords = ["sync", "etl", "retry", "rate-limit", "checkpoint", "github-actions"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+]
+# Intentionally empty. See README "Design decisions" -- the runtime surface
+# is standard library only so this can be dropped into a locked-down runner.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "ruff>=0.5"]
+
+[project.urls]
+Homepage = "https://github.com/averya34/scheduled-api-sync"
+Issues = "https://github.com/averya34/scheduled-api-sync/issues"
+
+[tool.setuptools]
+packages = ["synckit"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+# S101: assert is the whole point of pytest, and the few asserts in library
+# code are invariant checks, not input validation.
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+# S105/S106/S107: tests contain fake credentials on purpose, to prove the
+# redaction filter removes them.
+# S311: the non-cryptographic RNG in tests is a deterministic stub.
+"tests/*" = ["S105", "S106", "S107", "S311", "B011"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = ["error"]

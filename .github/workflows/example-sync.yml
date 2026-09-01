@@ -1,0 +1,93 @@
+name: Nightly contact sync
+
+# A realistic scheduled sync. Copy this file, change the script and the
+# secret names, and you have a production job.
+
+on:
+  schedule:
+    # 02:17 UTC rather than 02:00. Everybody schedules on the hour, so the
+    # hour boundary is when third-party APIs are most congested and when
+    # GitHub's own hosted-runner queue is deepest. An odd minute costs
+    # nothing and avoids the crowd.
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Compute everything, write nothing"
+        type: boolean
+        required: false
+        default: true
+
+# Least privilege. This job reads code and talks to a third-party API; it has
+# no reason to be able to write to the repository, publish packages, or mint
+# an OIDC token. Anything the job (or a compromised action in its dependency
+# chain) tries beyond reading will fail closed.
+permissions:
+  contents: read
+
+# One sync at a time. Overlapping runs of the same job would race on the
+# checkpoint file and double-write batches to the destination API.
+# cancel-in-progress is deliberately false: killing a sync mid-batch is worse
+# than letting it finish, because the checkpoint only advances on success.
+concurrency:
+  group: nightly-contact-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # A hard ceiling so a hung upstream connection cannot burn a full six
+    # hours of runner time before anyone notices.
+    timeout-minutes: 30
+
+    # Environments give you required reviewers and scoped secrets, so a
+    # workflow_dispatch against production is an explicit, audited action.
+    environment: production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        # No runtime dependencies, so this resolves nothing from PyPI beyond
+        # the package itself. Nothing to pin, nothing to get typosquatted.
+        run: pip install -e .
+
+      - name: Restore sync checkpoint
+        # Best-effort resumability across runs. If the cache misses, the job
+        # simply starts from the beginning -- correct, just slower.
+        uses: actions/cache@v4
+        with:
+          path: .state
+          key: sync-state-contacts-${{ github.run_id }}
+          restore-keys: |
+            sync-state-contacts-
+
+      - name: Run sync
+        env:
+          # Secrets are passed as environment variables, never as command
+          # line arguments: argv is visible to every other process on the
+          # runner and is echoed into the step log when a shell traces.
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          SYNC_STATE_PATH: .state/contacts.json
+        run: |
+          python examples/sync_contacts.py \
+            --batch-size 100 \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Upload run log
+        # Runs even on failure -- the failed run is the one worth keeping.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-log-${{ github.run_id }}
+          path: .state/
+          # Short retention: these artefacts are for triage this week, not
+          # an indefinite copy of operational data sitting in the repo.
+          retention-days: 7
+          if-no-files-found: ignore

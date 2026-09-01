@@ -11,7 +11,7 @@ REST API, and write into another. CRM to warehouse. Accounting system to
 reporting table. HR directory to access control.
 
 I built this because I kept writing the same four hundred lines. My day job is
-operations systems engineering, and a recurring shape of work is a nightly sync
+operations systems consulting, and a recurring shape of work is a nightly sync
 between a CRM and a CMS database table. Each time I wrote one, I rebuilt the
 same scaffolding — retry with backoff, a rate limiter to stay inside the
 provider's quota, somewhere to keep the cursor, a way to prove the change was
